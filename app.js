@@ -73,8 +73,7 @@ function seasonStat(store, id, year) {
 
 function addCriterion(id, label, kind, ids) {
   const unique = [...new Set(ids)].filter(Boolean);
-  if (!unique.length) return;
-  CRITERIA.push({ id, label, kind, players: unique });
+  if (unique.length) CRITERIA.push({ id, label, kind, players: unique });
 }
 
 function anySeason(store, id, test) {
@@ -98,7 +97,6 @@ function intersection(a, b, excludeUsed = true) {
   const A = CSET.get(a.id);
   const B = CSET.get(b.id);
   if (!(A instanceof Set) || !(B instanceof Set)) return [];
-
   const used = excludeUsed ? usedPlayerIds() : null;
   const out = [];
   for (const id of A) {
@@ -131,10 +129,8 @@ function buildPuzzle() {
       ...shuffle(teams.filter(c => !usedIds.has(c.id))).slice(0, 2),
       ...shuffle(nonTeams.filter(c => !usedIds.has(c.id))).slice(0, 1)
     ]);
-
     if (rows.length !== 3 || cols.length !== 3) continue;
-    const valid = rows.every(r => cols.every(c => intersection(r, c, false).length > 0));
-    if (valid) {
+    if (rows.every(r => cols.every(c => intersection(r, c, false).length > 0))) {
       state.rows = rows;
       state.cols = cols;
       return true;
@@ -162,13 +158,33 @@ function esc(s) {
   }[ch]));
 }
 
+function chineseDisplayName(raw) {
+  let name = String(raw || '').trim();
+  name = name.replace(/[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*/g, '');
+  name = name.replace(/[_.\-]/g, '').replace(/\s+/g, '');
+  const parts = name.match(/[\u3400-\u9FFF．・·]+/g);
+  return parts ? parts.join('') : '';
+}
+
+function isComplete() {
+  return Object.keys(state.solved).length === 9;
+}
+
+function openComplete() {
+  document.getElementById('completeModal').classList.add('open');
+}
+
+function closeComplete() {
+  document.getElementById('completeModal').classList.remove('open');
+}
+
 function render() {
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
 
   const score = document.createElement('div');
   score.className = 'score';
-  score.innerHTML = '<span>Rarity score:</span><strong>—</strong>';
+  score.innerHTML = '<span>稀有度分數：</span><strong>—</strong>';
   grid.appendChild(score);
 
   state.cols.forEach(c => {
@@ -189,7 +205,6 @@ function render() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'cell' + (state.solved[key] ? ' solved' : '');
-
       if (state.solved[key]) {
         const name = state.solved[key].name;
         btn.innerHTML = `<span class="rarity">—</span><span class="avatar">${esc([...name][0] || '⚾')}</span><span class="namebar">${esc(name)}</span>`;
@@ -207,7 +222,6 @@ function openCell(r, c) {
   const a = state.rows[r];
   const b = state.cols[c];
   if (!a || !b) return;
-
   state.selected = { a, b, key: `${r}-${c}` };
   document.getElementById('pair').textContent = `${a.label} × ${b.label}`;
   document.getElementById('possible').textContent = `共有 ${intersection(a, b, false).length} 位可能球員`;
@@ -229,27 +243,30 @@ function doSearch(q) {
   results.innerHTML = '';
   if (!q) return;
 
-  const names = new Map();
-  PLAYERS.forEach(p => p.n.forEach(name => {
-    if (name.toLowerCase().includes(q)) {
-      if (!names.has(name)) names.set(name, []);
-      names.get(name).push(p);
-    }
-  }));
+  const groups = new Map();
+  PLAYERS.forEach(player => {
+    player.n.forEach(rawName => {
+      const display = chineseDisplayName(rawName);
+      if (!display) return;
+      if (!rawName.toLowerCase().includes(q) && !display.toLowerCase().includes(q)) return;
+      if (!groups.has(display)) groups.set(display, new Map());
+      groups.get(display).set(player.i, player);
+    });
+  });
 
-  [...names.entries()]
+  [...groups.entries()]
     .sort((a, b) => {
       const ap = a[0].toLowerCase().startsWith(q) ? 0 : 1;
       const bp = b[0].toLowerCase().startsWith(q) ? 0 : 1;
       return ap - bp || a[0].localeCompare(b[0], 'zh-Hant');
     })
     .slice(0, 70)
-    .forEach(([name, players]) => {
+    .forEach(([display, playerMap]) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'result';
-      btn.textContent = name;
-      btn.addEventListener('click', () => submitPlayer(name, players));
+      btn.textContent = display;
+      btn.addEventListener('click', () => submitPlayer(display, [...playerMap.values()]));
       results.appendChild(btn);
     });
 }
@@ -279,7 +296,15 @@ function submitPlayer(name, candidates) {
   msg.className = 'msg good';
   msg.textContent = `✅ ${name} 正確`;
   render();
-  setTimeout(closePlayer, 350);
+
+  if (isComplete()) {
+    setTimeout(() => {
+      closePlayer();
+      openComplete();
+    }, 450);
+  } else {
+    setTimeout(closePlayer, 350);
+  }
 }
 
 async function loadData() {
@@ -296,7 +321,6 @@ async function loadData() {
 
     const metadata = parseCSV(playersText);
     const canonical = new Map(metadata.map(x => [x.ID, x.Name]));
-
     const players = new Map();
     const batting = new Map();
     const pitching = new Map();
@@ -359,12 +383,7 @@ async function loadData() {
     PLAYERS.forEach(p => p.t.forEach(t => teams.add(t)));
     [...teams].forEach(team => {
       const aliases = TEAM_EQ[team] || [team];
-      addCriterion(
-        `team:${team}`,
-        team,
-        'team',
-        PLAYERS.filter(p => aliases.some(t => p.t.includes(t))).map(p => p.i)
-      );
+      addCriterion(`team:${team}`, team, 'team', PLAYERS.filter(p => aliases.some(t => p.t.includes(t))).map(p => p.i));
     });
 
     addCriterion('s20hr','單季 20+ 轟','stat', PLAYERS.filter(p => anySeason(batting,p.i,s => num(s.HR) >= 20)).map(p => p.i));
@@ -372,12 +391,12 @@ async function loadData() {
     addCriterion('s80rbi','單季 80+ 打點','stat', PLAYERS.filter(p => anySeason(batting,p.i,s => num(s.RBI) >= 80)).map(p => p.i));
     addCriterion('s30sb','單季 30+ 盜','stat', PLAYERS.filter(p => anySeason(batting,p.i,s => num(s.SB) >= 30)).map(p => p.i));
     addCriterion('s10w','單季 10+ 勝','stat', PLAYERS.filter(p => anySeason(pitching,p.i,s => num(s.W) >= 10)).map(p => p.i));
-    addCriterion('s100k','單季 100+ K','stat', PLAYERS.filter(p => anySeason(pitching,p.i,s => num(s.SO) >= 100)).map(p => p.i));
+    addCriterion('s100k','單季 100+ 三振','stat', PLAYERS.filter(p => anySeason(pitching,p.i,s => num(s.SO) >= 100)).map(p => p.i));
     addCriterion('s20sv','單季 20+ 救援','stat', PLAYERS.filter(p => anySeason(pitching,p.i,s => num(s.SV) >= 20)).map(p => p.i));
     addCriterion('c100hr','生涯 100+ 轟','stat', PLAYERS.filter(p => careerTotal(batting,p.i,'HR') >= 100).map(p => p.i));
     addCriterion('c1000h','生涯 1000+ 安','stat', PLAYERS.filter(p => careerTotal(batting,p.i,'H') >= 1000).map(p => p.i));
     addCriterion('c100w','生涯 100+ 勝','stat', PLAYERS.filter(p => careerTotal(pitching,p.i,'W') >= 100).map(p => p.i));
-    addCriterion('c1000k','生涯 1000+ K','stat', PLAYERS.filter(p => careerTotal(pitching,p.i,'SO') >= 1000).map(p => p.i));
+    addCriterion('c1000k','生涯 1000+ 三振','stat', PLAYERS.filter(p => careerTotal(pitching,p.i,'SO') >= 1000).map(p => p.i));
 
     Object.entries(AWARDS).forEach(([label, names]) => {
       const ids = [];
@@ -386,7 +405,6 @@ async function loadData() {
     });
 
     CSET = new Map(CRITERIA.map(c => [c.id, new Set(c.players)]));
-
     if (!buildPuzzle()) throw new Error('無法產生有效題目');
 
     loading.hidden = true;
@@ -399,18 +417,27 @@ async function loadData() {
   }
 }
 
+function startNewPuzzle() {
+  state.solved = {};
+  closeComplete();
+  if (buildPuzzle()) render();
+}
+
 document.getElementById('search').addEventListener('input', e => doSearch(e.target.value));
 document.getElementById('closePlayer').addEventListener('click', closePlayer);
 document.getElementById('resetBtn').addEventListener('click', () => {
   state.solved = {};
+  closeComplete();
   render();
 });
-document.getElementById('newBtn').addEventListener('click', () => {
-  state.solved = {};
-  if (buildPuzzle()) render();
-});
+document.getElementById('newBtn').addEventListener('click', startNewPuzzle);
+document.getElementById('completeNewBtn').addEventListener('click', startNewPuzzle);
+document.getElementById('completeCloseBtn').addEventListener('click', closeComplete);
 document.getElementById('playerModal').addEventListener('click', e => {
   if (e.target.id === 'playerModal') closePlayer();
+});
+document.getElementById('completeModal').addEventListener('click', e => {
+  if (e.target.id === 'completeModal') closeComplete();
 });
 
 loadData();
