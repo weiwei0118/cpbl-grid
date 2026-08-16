@@ -19,6 +19,7 @@
         <b>注意事項</b>
         <ul>
           <li>同一位球員整個九宮格只能使用一次；舊名／新名若為同一位球員也算重複。</li>
+          <li>已填的格子可以重新更換球員，該格會保留本局的填答紀錄。</li>
           <li>兄弟象與中信兄弟分開；味全龍（1990–1999）與味全龍（2021–）分開。</li>
           <li>球隊效力以 2026 開季前已正式加盟（職棒37年）為截止點；年度成績／獎項以 2025 賽季（職棒36年）為結算基準。</li>
         </ul>
@@ -38,11 +39,27 @@
     <section class="modal">
       <h2>選擇球員</h2>
       <div id="pair" class="pair"></div>
+      <div id="cellHistoryInline" class="history-inline" hidden></div>
       <div id="possible" class="possible"></div>
       <input id="search" class="search" type="search" autocomplete="off" placeholder="輸入球員姓名，例如: 陳傑憲">
       <div id="results" class="results"></div>
       <div id="msg" class="msg"></div>
       <button id="closePlayer" class="close" type="button">關閉</button>
+    </section>
+  </div>
+
+  <div id="editModal" class="modalbg">
+    <section class="modal edit-card">
+      <h2>管理這一格</h2>
+      <div id="editPair" class="pair"></div>
+      <div class="current-pick-label">目前球員</div>
+      <div id="editCurrent" class="current-pick"></div>
+      <div class="history-title">填答紀錄</div>
+      <div id="editHistory" class="history-list"></div>
+      <div class="edit-actions">
+        <button id="replacePlayerBtn" class="danger-btn" type="button">清除並更換球員</button>
+        <button id="closeEditBtn" class="secondary-btn" type="button">關閉</button>
+      </div>
     </section>
   </div>
 
