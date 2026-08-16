@@ -20,6 +20,7 @@
         <ul>
           <li>同一位球員整個九宮格只能使用一次；舊名／新名若為同一位球員也算重複。</li>
           <li>已填的格子可以重新更換球員，該格會保留本局的填答紀錄。</li>
+          <li>按下「開始遊戲」後開始計時；每次送出一位球員都計為 1 次作答。</li>
           <li>兄弟象與中信兄弟分開；味全龍（1990–1999）與味全龍（2021–）分開。</li>
           <li>統一球團歷年名稱統一顯示為「統一7-ELEVEn獅」。</li>
           <li>球隊效力以 2026 開季前已正式加盟（職棒37年）為截止點；年度成績／獎項以 2025 賽季（職棒36年）為結算基準。</li>
@@ -70,10 +71,10 @@
       <h2>完成 CPBL GRID！</h2>
       <div class="complete-nine">9 / 9 全部答對</div>
       <div class="complete-score">
-        <span>稀有度分數</span>
-        <strong>—</strong>
+        <div class="finish-stat"><span>完成時間</span><strong>—</strong></div>
+        <div class="finish-stat"><span>作答次數</span><strong>—</strong></div>
       </div>
-      <p>玩家統計功能完成後，這裡會顯示正式的稀有度分數與排名。</p>
+      <p>完成後會顯示秒數與作答次數。</p>
       <div class="complete-actions">
         <button id="completeNewBtn" class="complete-primary" type="button">再玩一題</button>
         <button id="completeCloseBtn" class="complete-secondary" type="button">查看棋盤</button>
@@ -83,5 +84,6 @@
 
   <script src="app.js"></script>
   <script src="team-unilions-patch.js"></script>
+  <script src="score-mode.js"></script>
 </body>
 </html>
