@@ -27,7 +27,14 @@ const AWARDS = {
 let PLAYERS = [];
 let CRITERIA = [];
 let CSET = new Map();
-const state = { rows: [], cols: [], solved: {}, selected: null };
+const state = {
+  rows: [],
+  cols: [],
+  solved: {},
+  history: {},
+  selected: null,
+  editKey: null
+};
 
 function parseCSV(text) {
   const rows = [];
@@ -166,6 +173,19 @@ function chineseDisplayName(raw) {
   return parts ? parts.join('') : '';
 }
 
+function historyFor(key) {
+  return state.history[key] || [];
+}
+
+function recordPick(key, pick) {
+  if (!state.history[key]) state.history[key] = [];
+  state.history[key].push({
+    id: pick.id,
+    name: pick.name,
+    order: state.history[key].length + 1
+  });
+}
+
 function isComplete() {
   return Object.keys(state.solved).length === 9;
 }
@@ -176,6 +196,11 @@ function openComplete() {
 
 function closeComplete() {
   document.getElementById('completeModal').classList.remove('open');
+}
+
+function closeEdit() {
+  document.getElementById('editModal').classList.remove('open');
+  state.editKey = null;
 }
 
 function render() {
@@ -205,10 +230,12 @@ function render() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'cell' + (state.solved[key] ? ' solved' : '');
+
       if (state.solved[key]) {
         const name = state.solved[key].name;
         btn.innerHTML = `<span class="rarity">—</span><span class="avatar">${esc([...name][0] || '⚾')}</span><span class="namebar">${esc(name)}</span>`;
-        btn.disabled = true;
+        btn.title = '點一下可以更換球員或查看填答紀錄';
+        btn.addEventListener('click', () => openEditCell(ri, ci));
       } else {
         btn.innerHTML = '<span class="plus">+</span>';
         btn.addEventListener('click', () => openCell(ri, ci));
@@ -218,12 +245,26 @@ function render() {
   });
 }
 
+function renderInlineHistory(key) {
+  const box = document.getElementById('cellHistoryInline');
+  const history = historyFor(key);
+  if (!history.length) {
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = `<strong>這格曾填過：</strong>${history.map(x => esc(x.name)).join('、')}`;
+}
+
 function openCell(r, c) {
   const a = state.rows[r];
   const b = state.cols[c];
   if (!a || !b) return;
-  state.selected = { a, b, key: `${r}-${c}` };
+  const key = `${r}-${c}`;
+  state.selected = { a, b, key };
   document.getElementById('pair').textContent = `${a.label} × ${b.label}`;
+  renderInlineHistory(key);
   document.getElementById('possible').textContent = `共有 ${intersection(a, b, false).length} 位可能球員`;
   document.getElementById('search').value = '';
   document.getElementById('results').innerHTML = '';
@@ -235,6 +276,49 @@ function openCell(r, c) {
 function closePlayer() {
   document.getElementById('playerModal').classList.remove('open');
   state.selected = null;
+}
+
+function openEditCell(r, c) {
+  const key = `${r}-${c}`;
+  const current = state.solved[key];
+  if (!current) {
+    openCell(r, c);
+    return;
+  }
+
+  state.editKey = key;
+  document.getElementById('editPair').textContent = `${state.rows[r].label} × ${state.cols[c].label}`;
+  document.getElementById('editCurrent').textContent = current.name;
+
+  const historyBox = document.getElementById('editHistory');
+  const history = historyFor(key);
+  historyBox.innerHTML = '';
+
+  if (!history.length) {
+    historyBox.innerHTML = '<div class="history-item"><span>尚無歷史紀錄</span></div>';
+  } else {
+    history.forEach((item, index) => {
+      const row = document.createElement('div');
+      const isCurrent = index === history.length - 1 && current.id === item.id && current.name === item.name;
+      row.className = 'history-item' + (isCurrent ? ' current' : '');
+      row.innerHTML = `<span>${esc(item.name)}</span><span class="history-tag">${isCurrent ? '目前使用' : `第 ${index + 1} 次填答`}</span>`;
+      historyBox.appendChild(row);
+    });
+  }
+
+  document.getElementById('editModal').classList.add('open');
+}
+
+function clearAndReplace() {
+  const key = state.editKey;
+  if (!key || !state.solved[key]) return;
+  delete state.solved[key];
+  closeComplete();
+  closeEdit();
+  render();
+
+  const [r, c] = key.split('-').map(Number);
+  openCell(r, c);
 }
 
 function doSearch(q) {
@@ -292,7 +376,9 @@ function submitPlayer(name, candidates) {
     return;
   }
 
-  state.solved[s.key] = { id: winner.i, name };
+  const pick = { id: winner.i, name };
+  state.solved[s.key] = pick;
+  recordPick(s.key, pick);
   msg.className = 'msg good';
   msg.textContent = `✅ ${name} 正確`;
   render();
@@ -417,24 +503,41 @@ async function loadData() {
   }
 }
 
+function resetCurrentPuzzle() {
+  state.solved = {};
+  state.history = {};
+  state.selected = null;
+  state.editKey = null;
+  closePlayer();
+  closeEdit();
+  closeComplete();
+  render();
+}
+
 function startNewPuzzle() {
   state.solved = {};
+  state.history = {};
+  state.selected = null;
+  state.editKey = null;
+  closePlayer();
+  closeEdit();
   closeComplete();
   if (buildPuzzle()) render();
 }
 
 document.getElementById('search').addEventListener('input', e => doSearch(e.target.value));
 document.getElementById('closePlayer').addEventListener('click', closePlayer);
-document.getElementById('resetBtn').addEventListener('click', () => {
-  state.solved = {};
-  closeComplete();
-  render();
-});
+document.getElementById('resetBtn').addEventListener('click', resetCurrentPuzzle);
 document.getElementById('newBtn').addEventListener('click', startNewPuzzle);
 document.getElementById('completeNewBtn').addEventListener('click', startNewPuzzle);
 document.getElementById('completeCloseBtn').addEventListener('click', closeComplete);
+document.getElementById('replacePlayerBtn').addEventListener('click', clearAndReplace);
+document.getElementById('closeEditBtn').addEventListener('click', closeEdit);
 document.getElementById('playerModal').addEventListener('click', e => {
   if (e.target.id === 'playerModal') closePlayer();
+});
+document.getElementById('editModal').addEventListener('click', e => {
+  if (e.target.id === 'editModal') closeEdit();
 });
 document.getElementById('completeModal').addEventListener('click', e => {
   if (e.target.id === 'completeModal') closeComplete();
